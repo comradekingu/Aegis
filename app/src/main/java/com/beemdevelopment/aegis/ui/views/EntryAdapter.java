@@ -484,7 +484,8 @@ RecyclerView.ViewHolder holder;
                     if (event.getActionMasked() == MotionEvent.ACTION_MOVE
                             && _selectedEntries.size() == 1
                             && _selectedEntries.get(0) == entryHolder.getEntry()
-                            && isDragAndDropAllowed()) {
+                            && isDragAndDropAllowed()
+                            && !entryHolder.getEntry().getIsFavorited()) {
                         _view.startDrag(_dragHandleHolder);
                         return true;
                     }
