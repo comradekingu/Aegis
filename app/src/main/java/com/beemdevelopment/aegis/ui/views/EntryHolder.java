@@ -13,6 +13,7 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.amulyakhare.textdrawable.TextDrawable;
+import com.beemdevelopment.aegis.Preferences;
 import com.beemdevelopment.aegis.R;
 import com.beemdevelopment.aegis.helpers.IconViewHelper;
 import com.beemdevelopment.aegis.helpers.TextDrawableHelper;
@@ -20,6 +21,7 @@ import com.beemdevelopment.aegis.helpers.ThemeHelper;
 import com.beemdevelopment.aegis.helpers.UiRefresher;
 import com.beemdevelopment.aegis.otp.HotpInfo;
 import com.beemdevelopment.aegis.otp.OtpInfo;
+import com.beemdevelopment.aegis.otp.OtpInfoException;
 import com.beemdevelopment.aegis.otp.SteamInfo;
 import com.beemdevelopment.aegis.otp.TotpInfo;
 import com.beemdevelopment.aegis.otp.YandexInfo;
@@ -47,7 +49,7 @@ public class EntryHolder extends RecyclerView.ViewHolder {
     private final ImageView _selected;
     private final Handler _selectedHandler;
 
-    private int _codeGroupSize = 6;
+    private Preferences.CodeGrouping _codeGrouping = Preferences.CodeGrouping.NO_GROUPING;
 
     private boolean _hidden;
     private boolean _paused;
@@ -103,15 +105,11 @@ public class EntryHolder extends RecyclerView.ViewHolder {
         });
     }
 
-    public void setData(VaultEntry entry, int codeGroupSize, boolean showAccountName, boolean showProgress, boolean hidden, boolean paused, boolean dimmed) {
+    public void setData(VaultEntry entry, Preferences.CodeGrouping groupSize, boolean showAccountName, boolean showProgress, boolean hidden, boolean paused, boolean dimmed) {
         _entry = entry;
         _hidden = hidden;
         _paused = paused;
-
-        if (codeGroupSize <= 0)
-            throw new IllegalArgumentException("Code group size cannot be zero or negative");
-
-        _codeGroupSize = codeGroupSize;
+        _codeGrouping = groupSize;
 
         _selected.clearAnimation();
         _selected.setVisibility(View.GONE);
@@ -242,18 +240,43 @@ public class EntryHolder extends RecyclerView.ViewHolder {
     private void updateCode() {
         OtpInfo info = _entry.getInfo();
 
-        String otp = info.getOtp();
-        if (!(info instanceof SteamInfo || info instanceof YandexInfo)) {
-            otp = formatCode(otp);
+        // In previous versions of Aegis, it was possible to import entries with an empty
+        // secret. Attempting to generate OTP's for such entries would result in a crash.
+        // In case we encounter an old entry that has this issue, we display "ERROR" as
+        // the OTP, instead of crashing.
+        String otp;
+        try {
+            otp = info.getOtp();
+            if (!(info instanceof SteamInfo || info instanceof YandexInfo)) {
+                otp = formatCode(otp);
+            }
+        } catch (OtpInfoException e) {
+            otp = _view.getResources().getString(R.string.error_all_caps);
         }
 
         _profileCode.setText(otp);
     }
 
     private String formatCode(String code) {
+        int groupSize;
         StringBuilder sb = new StringBuilder();
+
+        switch (_codeGrouping) {
+            case NO_GROUPING:
+                groupSize = code.length();
+                break;
+            case HALVES:
+                groupSize = (code.length() / 2) + (code.length() % 2);
+                break;
+            default:
+                groupSize = _codeGrouping.getValue();
+                if (groupSize <= 0) {
+                    throw new IllegalArgumentException("Code group size cannot be zero or negative");
+                }
+        }
+
         for (int i = 0; i < code.length(); i++) {
-            if (i != 0 && i % _codeGroupSize == 0) {
+            if (i != 0 && i % groupSize == 0) {
                 sb.append(" ");
             }
             sb.append(code.charAt(i));

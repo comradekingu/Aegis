@@ -39,7 +39,7 @@
     <string name="pref_view_mode_title">View mode</string>
     <string name="pref_lang_title">Language</string>
     <string name="pref_code_group_size_title">Code digit grouping</string>
-    <string name="pref_code_group_size_summary">Show code in 2-digit grouping instead of 3-digit grouping</string>
+    <string name="pref_code_group_size_summary">Select number of digits to group codes by</string>
     <string name="pref_account_name_title">Show the account name</string>
     <string name="pref_account_name_summary">Enable this to show the account name next to the issuer</string>
     <string name="pref_import_file_title">Import from file</string>
@@ -63,6 +63,13 @@
     <string name="pref_export_title">Export</string>
     <string name="pref_export_summary">Export the vault</string>
     <string name="pref_password_reminder_title">Password reminder</string>
+    <string name="pref_google_auth_export_title">Export for Google Authenticator</string>
+    <string name="pref_google_auth_export_descriptor">Generates export QR codes compatible with Google Authenticator</string>
+    <string name="pref_google_auth_export_no_data">No data to export</string>
+    <plurals name="pref_google_auth_export_incompatible_entries">
+        <item quantity="one">Skipped %d incompatible entry</item>
+        <item quantity="other">Skipped %d incompatible entries</item>
+    </plurals>
     <string name="pref_password_reminder_summary">Show a %s reminder to enter the password, so that you don\'t forget it.</string>
     <string name="pref_password_reminder_summary_disabled">Disabled</string>
     <string name="pref_secure_screen_title">Screen security</string>
@@ -147,6 +154,7 @@
     <string name="edit">Edit</string>
     <string name="favorite">Favorite</string>
     <string name="unfavorite">Unfavorite</string>
+    <string name="error_all_caps">ERROR</string>
     <string name="password">Password</string>
     <string name="confirm_password">Confirm password</string>
     <string name="show_password">Show password</string>
@@ -199,6 +207,9 @@
     <string name="disable_encryption_error">An error occurred while disabling encryption</string>
     <string name="backup_successful">The backup was scheduled successfully</string>
     <string name="backup_error">An error occurred while trying to create a backup</string>
+    <string name="backup_status_success">Most recent backup successful: %s</string>
+    <string name="backup_status_failed">Most recent backup failed: %s</string>
+    <string name="backup_status_none">No backups have been made yet</string>
     <string name="documentsui_error">DocumentsUI appears to be missing from your device. This is an important system component necessary for the selection and creation of documents. If you used a tool to &quot;debloat&quot; your device, you may have accidentally deleted it and will have to reinstall it.</string>
     <string name="icon_pack_import_error">An error occurred while trying to import an icon pack</string>
     <string name="icon_pack_import_exists_error">The icon pack you\'re trying to import already exists. Do you want to overwrite it?</string>
@@ -225,6 +236,10 @@
     <plurals name="imported_entries_count">
         <item quantity="one">Imported %d entry</item>
         <item quantity="other">Imported %d entries</item>
+    </plurals>
+    <plurals name="entries_shown">
+        <item quantity="one">Showing %d entry</item>
+        <item quantity="other">Showing %d entries</item>
     </plurals>
     <string name="intro_import_error_title">An error occurred while importing the vault</string>
     <string name="import_error_title">One or more errors occurred during the import</string>
@@ -274,6 +289,8 @@
 
     <string name="pref_highlight_entry_title">Highlight tokens when tapped</string>
     <string name="pref_highlight_entry_summary">Make tokens easier to distinguish from each other by temporarily highlighting them when tapped</string>
+    <string name="pref_minimize_on_copy_title">Minimize on copy</string>
+    <string name="pref_minimize_on_copy_summary">Minimize the app after copying a token</string>
     <string name="pref_copy_on_tap_title">Copy tokens when tapped</string>
     <string name="pref_copy_on_tap_summary">Copy tokens to the clipboard by tapping them</string>
     <string name="pref_pause_entry_title">Freeze tokens when tapped</string>
@@ -339,6 +356,9 @@
     </plurals>
     <string name="google_qr_export_unexpected">Expected QR code #%d, but scanned #%d instead</string>
     <string name="backup_error_bar_message"><b>Vault backup failed recently</b></string>
+    <string name="backup_error_dialog_details">A recent vault backup attempt using %s failed because an error occurred. The backup was attempted at: %s. Please check your backup settings to make sure backups can complete successfully.</string>
+    <string name="backup_system_builtin">Aegis\' built-in automatic backups</string>
+    <string name="backup_system_android">Android\'s cloud backup system</string>
     <string name="backup_reminder_bar_message"><b>Recent vault changes are not backed up</b></string>
     <string name="backup_plaintext_export_warning"><b>The vault was recently exported in plain text</b></string>
     <string name="pref_show_plaintext_warning_hint">Don\'t show this warning again</string>
@@ -370,14 +390,15 @@
     <string name="pick_icon">Pick an icon</string>
     <string name="uncategorized">Uncategorized</string>
     <string name="done">Done</string>
-    <plurals name="entries_count">
-        <item quantity="one">%d / %d entry</item>
-        <item quantity="other">%d / %d entries</item>
+    <plurals name="qr_count">
+        <item quantity="one">%d / %d QR code</item>
+        <item quantity="other">%d / %d QR codes</item>
     </plurals>
     <string name="next">Next</string>
     <string name="previous">Previous</string>
     <string name="transfer_entry">Transfer entry</string>
     <string name="transfer_entry_description">Scan this QR code with the authenticator app you would like to transfer this entry to</string>
+    <string name="google_auth_compatible_transfer_description">Scan these QR codes with Aegis or Google Authenticator.\n\nDue to limitations of the Google Authenticator app, only TOTP &amp; HOTP tokens that use SHA1 and produce 6-digit codes are included</string>
 
     <string name="password_strength_very_weak">Very weak</string>
     <string name="password_strength_weak">Weak</string>
@@ -416,7 +437,7 @@
     <string name="importer_help_google_authenticator"><b>Only database files from Google Authenticator v5.10 and prior are supported</b>.\n\nSupply a copy of <b>/data/data/com.google.android.apps.authenticator2/databases/databases</b>, located in the internal storage directory of Google Authenticator.</string>
     <string name="importer_help_microsoft_authenticator">Supply a copy of <b>/data/data/com.azure.authenticator/databases/PhoneFactor</b>, located in the internal storage directory of Microsoft Authenticator.</string>
     <string name="importer_help_plain_text">Supply a plain text file with a Google Authenticator URI on each line.</string>
-    <string name="importer_help_steam">Supply a copy of <b>/data/data/com.valvesoftware.android.steam.community/files/Steamguard-*.json</b>, located in the internal storage directory of Steam.</string>
+    <string name="importer_help_steam"><b>Steam v3.0 and newer are not supported</b>. Supply a copy of <b>/data/data/com.valvesoftware.android.steam.community/files/Steamguard-*.json</b>, located in the internal storage directory of Steam.</string>
     <string name="importer_help_totp_authenticator">Supply a TOTP Authenticator export file.</string>
     <string name="importer_help_winauth">Supply a WinAuth export file.</string>
 
@@ -426,4 +447,10 @@
     <string name="groups">Groups</string>
     <string name="pref_focus_search">Focus search on app start</string>
     <string name="pref_focus_search_summary">Focus the search immediately after opening the app.</string>
+
+    <string name="pref_grouping_halves">Halves</string>
+    <string name="pref_grouping_none">No grouping</string>
+    <string name="pref_grouping_size_two">Groups of 2</string>
+    <string name="pref_grouping_size_three">Groups of 3</string>
+    <string name="pref_grouping_size_four">Groups of 4</string>
 </resources>

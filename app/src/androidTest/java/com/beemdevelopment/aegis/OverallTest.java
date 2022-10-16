@@ -62,7 +62,7 @@ public class OverallTest extends AegisTest {
     public final TestRule testRule = RuleChain.outerRule(_activityRule).around(new ScreenshotTestRule());
 
     @Test
-    public void doOverallTest() {
+    public void testOverall() {
         ViewInteraction next = onView(withId(R.id.btnNext));
         next.perform(click());
         onView(withId(R.id.rb_password)).perform(click());
@@ -75,6 +75,7 @@ public class OverallTest extends AegisTest {
         VaultRepository vault = _vaultManager.getVault();
         assertTrue(vault.isEncryptionEnabled());
         assertTrue(vault.getCredentials().getSlots().has(PasswordSlot.class));
+        assertTrue(_prefs.isIntroDone());
 
         List<VaultEntry> entries = Arrays.asList(
                 generateEntry(TotpInfo.class, "Frank", "Google"),

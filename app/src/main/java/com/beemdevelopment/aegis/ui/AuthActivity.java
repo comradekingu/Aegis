@@ -1,5 +1,6 @@
 package com.beemdevelopment.aegis.ui;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
@@ -18,6 +19,7 @@ import android.widget.PopupWindow;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.biometric.BiometricPrompt;
@@ -30,6 +32,7 @@ import com.beemdevelopment.aegis.crypto.MasterKey;
 import com.beemdevelopment.aegis.helpers.BiometricsHelper;
 import com.beemdevelopment.aegis.helpers.EditTextHelper;
 import com.beemdevelopment.aegis.helpers.MetricsHelper;
+import com.beemdevelopment.aegis.helpers.PermissionHelper;
 import com.beemdevelopment.aegis.helpers.UiThreadExecutor;
 import com.beemdevelopment.aegis.ui.dialogs.Dialogs;
 import com.beemdevelopment.aegis.ui.tasks.PasswordSlotDecryptTask;
@@ -49,6 +52,9 @@ import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 
 public class AuthActivity extends AegisActivity {
+    // Permission request codes
+    private static final int CODE_PERM_NOTIFICATIONS = 0;
+
     private EditText _textPassword;
 
     private SlotList _slots;
@@ -71,6 +77,8 @@ public class AuthActivity extends AegisActivity {
         Button decryptButton = findViewById(R.id.button_decrypt);
         TextView biometricsButton = findViewById(R.id.button_biometrics);
 
+        getOnBackPressedDispatcher().addCallback(this, new BackPressHandler());
+
         _textPassword.setOnEditorActionListener((v, actionId, event) -> {
             if ((event != null && (event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) || (actionId == EditorInfo.IME_ACTION_DONE)) {
                 decryptButton.performClick();
@@ -85,12 +93,21 @@ public class AuthActivity extends AegisActivity {
         Intent intent = getIntent();
         if (savedInstanceState == null) {
             _inhibitBioPrompt = intent.getBooleanExtra("inhibitBioPrompt", false);
+
+            // A persistent notification is shown to let the user know that the vault is unlocked. Permission
+            // to do so is required since API 33, so for existing users, we have to request permission here
+            // in order to be able to show the notification after unlock.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                PermissionHelper.request(this, CODE_PERM_NOTIFICATIONS, Manifest.permission.POST_NOTIFICATIONS);
+            }
         } else {
             _inhibitBioPrompt = savedInstanceState.getBoolean("inhibitBioPrompt", false);
         }
 
         if (_vaultManager.getVaultFileError() != null) {
-            Dialogs.showErrorDialog(this, R.string.vault_load_error, _vaultManager.getVaultFileError(), (dialog, which) -> onBackPressed());
+            Dialogs.showErrorDialog(this, R.string.vault_load_error, _vaultManager.getVaultFileError(), (dialog, which) -> {
+                getOnBackPressedDispatcher().onBackPressed();
+            });
             return;
         }
 
@@ -165,11 +182,6 @@ public class AuthActivity extends AegisActivity {
 
         InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
         imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
-    }
-
-    @Override
-    public void onBackPressed() {
-        finishAffinity();
     }
 
     @Override
@@ -286,6 +298,19 @@ public class AuthActivity extends AegisActivity {
 
         if (_failedUnlockAttempts >= 3) {
             _textPassword.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        }
+    }
+
+    private class BackPressHandler extends OnBackPressedCallback {
+        public BackPressHandler() {
+            super(true);
+        }
+
+        @Override
+        public void handleOnBackPressed() {
+            // This breaks predictive back gestures, but it doesn't make sense
+            // to go back to MainActivity when cancelling auth
+            finishAffinity();
         }
     }
 

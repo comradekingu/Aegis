@@ -1,14 +1,18 @@
 package com.beemdevelopment.aegis.ui;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.ClipData;
+import android.content.ClipDescription;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Typeface;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.PersistableBundle;
 import android.provider.Settings;
 import android.text.Spannable;
 import android.text.SpannableStringBuilder;
@@ -25,6 +29,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.view.ActionMode;
 import androidx.appcompat.widget.SearchView;
@@ -37,6 +43,7 @@ import com.beemdevelopment.aegis.helpers.FabScrollHelper;
 import com.beemdevelopment.aegis.helpers.PermissionHelper;
 import com.beemdevelopment.aegis.otp.GoogleAuthInfo;
 import com.beemdevelopment.aegis.otp.GoogleAuthInfoException;
+import com.beemdevelopment.aegis.otp.OtpInfoException;
 import com.beemdevelopment.aegis.ui.dialogs.Dialogs;
 import com.beemdevelopment.aegis.ui.fragments.preferences.BackupsPreferencesFragment;
 import com.beemdevelopment.aegis.ui.fragments.preferences.PreferencesFragment;
@@ -45,6 +52,7 @@ import com.beemdevelopment.aegis.ui.views.EntryListView;
 import com.beemdevelopment.aegis.vault.VaultEntry;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.common.base.Strings;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -64,20 +72,19 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
     private static final int CODE_PREFERENCES = 5;
     private static final int CODE_SCAN_IMAGE = 6;
 
-    // permission request codes
+    // Permission request codes
     private static final int CODE_PERM_CAMERA = 0;
-    private static final int CODE_PERM_READ_STORAGE = 1;
 
     private boolean _loaded;
     private boolean _isRecreated;
     private boolean _isDPadPressed;
+    private boolean _isDoingIntro;
+    private boolean _isAuthenticating;
 
-    private String _submittedSearchSubtitle;
-    private String _searchQueryInputText;
-    private String _activeSearchFilter;
+    private String _submittedSearchQuery;
+    private String _pendingSearchQuery;
 
     private List<VaultEntry> _selectedEntries;
-    private ActionMode _actionMode;
 
     private Menu _menu;
     private SearchView _searchView;
@@ -87,7 +94,12 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
 
     private FabScrollHelper _fabScrollHelper;
 
+    private ActionMode _actionMode;
     private ActionMode.Callback _actionModeCallbacks = new ActionModeCallbacks();
+
+    private LockBackPressHandler _lockBackPressHandler;
+    private SearchViewBackPressHandler _searchViewBackPressHandler;
+    private ActionModeBackPressHandler _actionModeBackPressHandler;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,13 +108,22 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
         setSupportActionBar(findViewById(R.id.toolbar));
         _loaded = false;
         _isDPadPressed = false;
-
+_isDoingIntro = false;
+        _isAuthenticating = false;
         if (savedInstanceState != null) {
             _isRecreated = true;
-            _searchQueryInputText = savedInstanceState.getString("searchQueryInputText");
-            _activeSearchFilter = savedInstanceState.getString("activeSearchFilter");
-            _submittedSearchSubtitle = savedInstanceState.getString("submittedSearchSubtitle");
+            _pendingSearchQuery = savedInstanceState.getString("pendingSearchQuery");
+            _submittedSearchQuery = savedInstanceState.getString("submittedSearchQuery");
+            _isDoingIntro = savedInstanceState.getBoolean("isDoingIntro");
+            _isAuthenticating = savedInstanceState.getBoolean("isAuthenticating");
         }
+
+        _lockBackPressHandler = new LockBackPressHandler();
+        getOnBackPressedDispatcher().addCallback(this, _lockBackPressHandler);
+        _searchViewBackPressHandler = new SearchViewBackPressHandler();
+        getOnBackPressedDispatcher().addCallback(this, _searchViewBackPressHandler);
+        _actionModeBackPressHandler = new ActionModeBackPressHandler();
+        getOnBackPressedDispatcher().addCallback(this, _actionModeBackPressHandler);
 
         _entryListView = (EntryListView) getSupportFragmentManager().findFragmentById(R.id.key_profiles);
         _entryListView.setListener(this);
@@ -168,15 +189,22 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
     }
 
     @Override
-    protected void onSaveInstanceState(Bundle instance) {
+    protected void onSaveInstanceState(@NonNull Bundle instance) {
         super.onSaveInstanceState(instance);
-        instance.putString("activeSearchFilter", _activeSearchFilter);
-        instance.putString("submittedSearchSubtitle", _submittedSearchSubtitle);
-        instance.putString("searchQueryInputText", _searchQueryInputText);
+        instance.putString("pendingSearchQuery", _pendingSearchQuery);
+        instance.putString("submittedSearchQuery", _submittedSearchQuery);
+        instance.putBoolean("isDoingIntro", _isDoingIntro);
+        instance.putBoolean("isAuthenticating", _isAuthenticating);
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == CODE_DECRYPT) {
+            _isAuthenticating = false;
+        }
+        if (requestCode == CODE_DO_INTRO) {
+            _isDoingIntro = false;
+        }
         if (resultCode != RESULT_OK) {
             return;
         }
@@ -214,13 +242,8 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
             return;
         }
 
-        switch (requestCode) {
-            case CODE_PERM_CAMERA:
-                startScanActivity();
-                break;
-            case CODE_PERM_READ_STORAGE:
-                startScanImageActivity();
-                break;
+        if (requestCode == CODE_PERM_CAMERA) {
+            startScanActivity();
         }
 
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -248,7 +271,7 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
                 recreate();
             } else if (data.getBooleanExtra("needsRefresh", false)) {
                 boolean showAccountName = _prefs.isAccountNameVisible();
-                int codeGroupSize = _prefs.getCodeGroupSize();
+                Preferences.CodeGrouping codeGroupSize = _prefs.getCodeGroupSize();
                 boolean highlightEntry = _prefs.isEntryHighlightEnabled();
                 boolean pauseFocused = _prefs.isPauseFocusedEnabled();
                 boolean tapToReveal = _prefs.isTapToRevealEnabled();
@@ -286,6 +309,14 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
         Intent intent = new Intent(this, EditEntryActivity.class);
         intent.putExtra("entryUUID", entry.getUUID());
         startActivityForResult(intent, requestCode);
+    }
+
+    private void startIntroActivity() {
+        if (!_isDoingIntro) {
+            Intent intro = new Intent(this, IntroActivity.class);
+            startActivityForResult(intro, CODE_DO_INTRO);
+            _isDoingIntro = true;
+        }
     }
 
     private void onScanResult(Intent data) {
@@ -570,8 +601,7 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
             if (_prefs.isIntroDone()) {
                 Toast.makeText(this, getString(R.string.vault_not_found), Toast.LENGTH_SHORT).show();
             }
-            Intent intro = new Intent(this, IntroActivity.class);
-            startActivityForResult(intro, CODE_DO_INTRO);
+            startIntroActivity();
             return;
         }
 
@@ -596,31 +626,14 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
             checkTimeSyncSetting();
         }
 
+        _lockBackPressHandler.setEnabled(
+                _vaultManager.isAutoLockEnabled(Preferences.AUTO_LOCK_ON_BACK_BUTTON)
+        );
+
         handleIncomingIntent();
         updateLockIcon();
         doShortcutActions();
         updateErrorBar();
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (!_searchView.isIconified() || _submittedSearchSubtitle != null) {
-            _submittedSearchSubtitle = null;
-            _entryListView.setSearchFilter(null);
-            _activeSearchFilter = null;
-
-            collapseSearchView();
-            setTitle(R.string.app_name);
-            getSupportActionBar().setSubtitle(null);
-            return;
-        }
-
-        if (_vaultManager.isAutoLockEnabled(Preferences.AUTO_LOCK_ON_BACK_BUTTON)) {
-            _vaultManager.lock(false);
-            return;
-        }
-
-        super.onBackPressed();
     }
 
     private void deleteEntries(List<VaultEntry> entries) {
@@ -646,56 +659,63 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
 
         _searchView = (SearchView) searchViewMenuItem.getActionView();
         _searchView.setMaxWidth(Integer.MAX_VALUE);
+        _searchView.setOnQueryTextFocusChangeListener((v, hasFocus) -> {
+            boolean enabled = _submittedSearchQuery != null || hasFocus;
+            _searchViewBackPressHandler.setEnabled(enabled);
+        });
+        _searchView.setOnCloseListener(() -> {
+            boolean enabled = _submittedSearchQuery != null;
+            _searchViewBackPressHandler.setEnabled(enabled);
+            return false;
+        });
 
         _searchView.setQueryHint(getString(R.string.search));
-        if (_prefs.getFocusSearchEnabled() && !_isRecreated) {
-            _searchView.setIconified(false);
-            _searchView.setFocusable(true);
-            _searchView.requestFocus();
-            _searchView.requestFocusFromTouch();
-        }
-
         _searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String s) {
                 setTitle(getString(R.string.search));
                 getSupportActionBar().setSubtitle(s);
-                _searchQueryInputText = null;
-                _submittedSearchSubtitle = s;
+                _entryListView.setSearchFilter(s);
+                _pendingSearchQuery = null;
+                _submittedSearchQuery = s;
                 collapseSearchView();
+                _searchViewBackPressHandler.setEnabled(true);
                 return false;
             }
 
             @Override
             public boolean onQueryTextChange(String s) {
-                if (_submittedSearchSubtitle == null) {
+                if (_submittedSearchQuery == null) {
                     _entryListView.setSearchFilter(s);
-                    _activeSearchFilter = s;
-                    _searchQueryInputText = s;
                 }
+
+                _pendingSearchQuery = Strings.isNullOrEmpty(s) && !_searchView.isIconified() ? null : s;
+                if (_pendingSearchQuery != null) {
+                    _entryListView.setSearchFilter(_pendingSearchQuery);
+                }
+
                 return false;
             }
         });
-
         _searchView.setOnSearchClickListener(v -> {
-            if (_submittedSearchSubtitle != null) {
-                _entryListView.setSearchFilter(null);
-                _activeSearchFilter = null;
-                _submittedSearchSubtitle = null;
-            }
+            String query = _submittedSearchQuery != null ? _submittedSearchQuery : _pendingSearchQuery;
+            _searchView.setQuery(query, false);
         });
 
-        if (_submittedSearchSubtitle != null) {
-            getSupportActionBar().setSubtitle(_submittedSearchSubtitle);
-        }
-
-        if (_activeSearchFilter != null) {
-            _entryListView.setSearchFilter(_activeSearchFilter);
-        }
-
-        if (_searchQueryInputText != null) {
-            _searchView.setQuery(_searchQueryInputText, false);
+        if (_pendingSearchQuery != null) {
             _searchView.setIconified(false);
+            _searchView.setQuery(_pendingSearchQuery, false);
+            _searchViewBackPressHandler.setEnabled(true);
+        } else if (_submittedSearchQuery != null) {
+            setTitle(getString(R.string.search));
+            getSupportActionBar().setSubtitle(_submittedSearchQuery);
+            _entryListView.setSearchFilter(_submittedSearchQuery);
+            _searchViewBackPressHandler.setEnabled(true);
+        } else if (_prefs.getFocusSearchEnabled() && !_isRecreated) {
+            _searchView.setIconified(false);
+            _searchView.setFocusable(true);
+            _searchView.requestFocus();
+            _searchView.requestFocusFromTouch();
         }
 
         return true;
@@ -766,9 +786,12 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
     }
 
     private void startAuthActivity(boolean inhibitBioPrompt) {
-        Intent intent = new Intent(this, AuthActivity.class);
-        intent.putExtra("inhibitBioPrompt", inhibitBioPrompt);
-        startActivityForResult(intent, CODE_DECRYPT);
+        if (!_isAuthenticating) {
+            Intent intent = new Intent(this, AuthActivity.class);
+            intent.putExtra("inhibitBioPrompt", inhibitBioPrompt);
+            startActivityForResult(intent, CODE_DECRYPT);
+            _isAuthenticating = true;
+        }
     }
 
     private void updateLockIcon() {
@@ -780,15 +803,13 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
     }
 
     private void updateErrorBar() {
-        String backupError = null;
-        if (_prefs.isBackupsEnabled()) {
-            backupError = _prefs.getBackupsError();
-        }
-
-        if (backupError != null) {
+        Preferences.BackupResult backupRes = _prefs.getErroredBackupResult();
+        if (backupRes != null) {
             _textErrorBar.setText(R.string.backup_error_bar_message);
             _btnErrorBar.setOnClickListener(view -> {
-                startPreferencesActivity(BackupsPreferencesFragment.class, "pref_backups");
+                Dialogs.showBackupErrorDialog(this, backupRes, (dialog, which) -> {
+                    startPreferencesActivity(BackupsPreferencesFragment.class, "pref_backups");
+                });
             });
             _btnErrorBar.setVisibility(View.VISIBLE);
         } else if (_prefs.isBackupsReminderNeeded()) {
@@ -896,7 +917,12 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
 
         _selectedEntries.add(entry);
         _entryListView.setActionModeState(true, entry);
+        startActionMode();
+    }
+
+    private void startActionMode() {
         _actionMode = startSupportActionMode(_actionModeCallbacks);
+        _actionModeBackPressHandler.setEnabled(true);
         setFavoriteMenuItemVisiblity();
     }
 
@@ -953,10 +979,71 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
         }
     }
 
+    @SuppressLint("InlinedApi")
     private void copyEntryCode(VaultEntry entry) {
+        String otp;
+        try {
+            otp = entry.getInfo().getOtp();
+        } catch (OtpInfoException e) {
+            return;
+        }
+
         ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-        ClipData clip = ClipData.newPlainText("text/plain", entry.getInfo().getOtp());
+        ClipData clip = ClipData.newPlainText("text/plain", otp);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            PersistableBundle extras = new PersistableBundle();
+            extras.putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true);
+            clip.getDescription().setExtras(extras);
+        }
         clipboard.setPrimaryClip(clip);
+        if (_prefs.isMinimizeOnCopyEnabled()) {
+            moveTaskToBack(true);
+        }
+    }
+
+    private class SearchViewBackPressHandler extends OnBackPressedCallback {
+        public SearchViewBackPressHandler() {
+            super(false);
+        }
+
+        @Override
+        public void handleOnBackPressed() {
+            if (!_searchView.isIconified() || _submittedSearchQuery != null) {
+                _submittedSearchQuery = null;
+                _pendingSearchQuery = null;
+                _entryListView.setSearchFilter(null);
+
+                collapseSearchView();
+                setTitle(R.string.app_name);
+                getSupportActionBar().setSubtitle(null);
+            }
+        }
+    }
+
+    private class LockBackPressHandler extends OnBackPressedCallback {
+        public LockBackPressHandler() {
+            super(false);
+        }
+
+        @Override
+        public void handleOnBackPressed() {
+            if (_vaultManager.isAutoLockEnabled(Preferences.AUTO_LOCK_ON_BACK_BUTTON)) {
+                _vaultManager.lock(false);
+            }
+        }
+    }
+
+    private class ActionModeBackPressHandler extends OnBackPressedCallback {
+        public ActionModeBackPressHandler() {
+            super(false);
+        }
+
+        @Override
+        public void handleOnBackPressed() {
+            if (_actionMode != null) {
+                _actionMode.finish();
+            }
+        }
     }
 
     private class ActionModeCallbacks implements ActionMode.Callback {
@@ -1036,6 +1123,7 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
             @Override
             public void onDestroyActionMode(ActionMode mode) {
                 _entryListView.setActionModeState(false, null);
+                _actionModeBackPressHandler.setEnabled(false);
                 _selectedEntries.clear();
                 _actionMode = null;
             }
