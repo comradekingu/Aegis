@@ -554,7 +554,7 @@ public class EntryListView extends Fragment implements EntryAdapter.Listener {
                 outRect.top = _height;
             }
 
-            if (_adapter.getEntryAt(parent.getChildAdapterPosition(view)).getIsFavorited()) {
+            if (parent.getChildAdapterPosition(view) < _adapter.getEntriesCount() && _adapter.getEntryAt(parent.getChildAdapterPosition(view)).getIsFavorited()) {
                 if (_adapter.getFavorites().size() == parent.getChildAdapterPosition(view) + 1) {
                     outRect.bottom = MetricsHelper.convertDpToPixels(requireContext(), 20);
                     return;
