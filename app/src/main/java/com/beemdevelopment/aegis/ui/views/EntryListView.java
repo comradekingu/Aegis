@@ -196,6 +196,12 @@ public class EntryListView extends Fragment implements EntryAdapter.Listener {
         return _adapter.getUsageCounts();
     }
 
+    public void setFavorites(List<UUID> favorites) {
+        _adapter.setFavorites(favorites);
+    }
+
+    public List<UUID> getFavorites() { return _adapter.getFavorites(); }
+
     public void setSearchFilter(String search) {
         _adapter.setSearchFilter(search);
         _touchCallback.setIsLongPressDragEnabled(_adapter.isDragAndDropAllowed());
@@ -347,6 +353,10 @@ public class EntryListView extends Fragment implements EntryAdapter.Listener {
                 tempHighlightEntry(entry);
             }
         }
+    }
+
+    public void toggleFavoriteState(VaultEntry entry) {
+        _adapter.toggleFavoriteState(entry);
     }
 
     public void tempHighlightEntry(VaultEntry entry) {
@@ -542,7 +552,12 @@ public class EntryListView extends Fragment implements EntryAdapter.Listener {
                 // the first item should also have a top margin
                 outRect.top = _height;
             }
-            outRect.bottom = _height;
+            if (_adapter.getEntryAt(parent.getChildAdapterPosition(view)).getIsFavorited()) {
+                outRect.bottom = 0;
+                return;
+            }
+
+            outRect.top = _height;
         }
     }
 

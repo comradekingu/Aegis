@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.beemdevelopment.aegis.SortCategory;
 import com.beemdevelopment.aegis.ViewMode;
 import com.beemdevelopment.aegis.helpers.ItemTouchHelperAdapter;
+import com.beemdevelopment.aegis.helpers.comparators.FavoriteComparator;
 import com.beemdevelopment.aegis.otp.HotpInfo;
 import com.beemdevelopment.aegis.otp.OtpInfo;
 import com.beemdevelopment.aegis.otp.OtpInfoException;
@@ -34,6 +35,7 @@ public class EntryAdapter extends RecyclerView.Adapter<EntryHolder> implements I
     private List<VaultEntry> _shownEntries;
     private List<VaultEntry> _selectedEntries;
     private Map<UUID, Integer> _usageCounts;
+    private List<UUID> _favorites;
     private VaultEntry _focusedEntry;
     private int _codeGroupSize;
     private boolean _showAccountName;
@@ -104,6 +106,17 @@ public class EntryAdapter extends RecyclerView.Adapter<EntryHolder> implements I
         _pauseFocused = pauseFocused;
     }
 
+    public void toggleFavoriteState(VaultEntry entry) {
+        if (_favorites.contains(entry.getUUID())) {
+            _favorites.remove(entry.getUUID());
+        } else {
+            _favorites.add(entry.getUUID());
+        }
+
+        entry.setIsFavorited(_favorites.contains(entry.getUUID()));
+        updateShownEntries();
+    }
+
     public VaultEntry getEntryAt(int position) {
         return _shownEntries.get(position);
     }
@@ -148,6 +161,7 @@ public class EntryAdapter extends RecyclerView.Adapter<EntryHolder> implements I
     public void addEntries(Collection<VaultEntry> entries) {
         for (VaultEntry entry: entries) {
             entry.setUsageCount(_usageCounts.containsKey(entry.getUUID()) ? _usageCounts.get(entry.getUUID()) : 0);
+            entry.setIsFavorited(_favorites.contains(entry.getUUID()));
         }
 
         _entries.addAll(entries);
@@ -293,6 +307,9 @@ public class EntryAdapter extends RecyclerView.Adapter<EntryHolder> implements I
             Collections.sort(_shownEntries, comparator);
         }
 
+        Comparator<VaultEntry> favoriteComparator = new FavoriteComparator();
+        Collections.sort(_shownEntries, favoriteComparator);
+
         _view.onListChange();
         notifyDataSetChanged();
     }
@@ -304,6 +321,10 @@ public class EntryAdapter extends RecyclerView.Adapter<EntryHolder> implements I
     public void setUsageCounts(Map<UUID, Integer> usageCounts) { _usageCounts = usageCounts; }
 
     public Map<UUID, Integer> getUsageCounts() { return _usageCounts; }
+
+    public void setFavorites(List<UUID> favorites) { _favorites = favorites; }
+
+    public List<UUID> getFavorites() { return _favorites; }
 
     public void setGroups(TreeSet<String> groups) {
         _view.setGroups(groups);
@@ -342,13 +363,17 @@ public class EntryAdapter extends RecyclerView.Adapter<EntryHolder> implements I
 
     @Override
     public int getItemViewType(int position) {
+        if (_shownEntries.get(position).getIsFavorited()) {
+            return ViewMode.COMPACT.getLayoutId();
+        }
         return _viewMode.getLayoutId();
     }
 
     @Override
     public EntryHolder onCreateViewHolder(ViewGroup parent, int viewType) {
         LayoutInflater inflater = LayoutInflater.from(parent.getContext());
-        View view = inflater.inflate(_viewMode.getLayoutId(), parent, false);
+
+        View view = inflater.inflate(viewType, parent, false);
         EntryHolder holder = new EntryHolder(view);
         _view.setPreloadView(holder.getIconView());
         return holder;
