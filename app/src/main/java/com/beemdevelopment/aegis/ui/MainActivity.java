@@ -97,7 +97,6 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
         _loaded = false;
         _isDPadPressed = false;
 
-
         if (savedInstanceState != null) {
             _isRecreated = true;
             _searchQueryInputText = savedInstanceState.getString("searchQueryInputText");
@@ -844,10 +843,7 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
             if (_selectedEntries.isEmpty()) {
                 _actionMode.finish();
             } else {
-                if (_selectedEntries.size() == 1) {
-                    setFavoriteMenuItemVisiblity();
-                }
-
+                setFavoriteMenuItemVisiblity();
                 setIsMultipleSelected(_selectedEntries.size() > 1);
             }
 
@@ -874,12 +870,17 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
     private void setFavoriteMenuItemVisiblity() {
         MenuItem toggleFavoriteMenuItem = _actionMode.getMenu().findItem(R.id.action_toggle_favorite);
 
-        if (_selectedEntries.get(0).getIsFavorited()) {
-            toggleFavoriteMenuItem.setIcon(R.drawable.ic_unset_favorite);
-            toggleFavoriteMenuItem.setTitle(R.string.unfavorite);
+        if (_selectedEntries.size() == 1){
+            if (_selectedEntries.get(0).getIsFavorited()) {
+                toggleFavoriteMenuItem.setIcon(R.drawable.ic_unset_favorite);
+                toggleFavoriteMenuItem.setTitle(R.string.unfavorite);
+            } else {
+                toggleFavoriteMenuItem.setIcon(R.drawable.ic_set_favorite);
+                toggleFavoriteMenuItem.setTitle(R.string.favorite);
+            }
         } else {
             toggleFavoriteMenuItem.setIcon(R.drawable.ic_set_favorite);
-            toggleFavoriteMenuItem.setTitle(R.string.favorite);
+            toggleFavoriteMenuItem.setTitle(String.format("%s / %s", getString(R.string.favorite), getString(R.string.unfavorite)));
         }
     }
 
@@ -989,7 +990,10 @@ public class MainActivity extends AegisActivity implements EntryListView.Listene
                         return true;
 
                     case R.id.action_toggle_favorite:
-                        toggleFavorite(_selectedEntries.get(0));
+                            for (VaultEntry entry : _selectedEntries) {
+                                toggleFavorite(entry);
+                            }
+
                         mode.finish();
                         return true;
 

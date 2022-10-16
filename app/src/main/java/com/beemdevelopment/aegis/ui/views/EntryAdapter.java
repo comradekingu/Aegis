@@ -363,9 +363,6 @@ public class EntryAdapter extends RecyclerView.Adapter<EntryHolder> implements I
 
     @Override
     public int getItemViewType(int position) {
-        if (_shownEntries.get(position).getIsFavorited()) {
-            return ViewMode.COMPACT.getLayoutId();
-        }
         return _viewMode.getLayoutId();
     }
 
@@ -447,7 +444,7 @@ public class EntryAdapter extends RecyclerView.Adapter<EntryHolder> implements I
 
                 boolean dragEnabled = _selectedEntries.size() == 0
                         || _selectedEntries.size() == 1 && _selectedEntries.get(0) == holder.getEntry();
-                if (dragEnabled && isDragAndDropAllowed()) {
+                if (dragEnabled && isDragAndDropAllowed() && !holder.getEntry().getIsFavorited()) {
                     _view.startDrag(_dragHandleHolder);
                 }
 
@@ -602,7 +599,7 @@ public class EntryAdapter extends RecyclerView.Adapter<EntryHolder> implements I
             return;
         }
 
-        if (_selectedEntries.size() == 1 && _dragHandleHolder == null) {
+        if (_selectedEntries.size() == 1 && _dragHandleHolder == null && !_selectedEntries.get(0).getIsFavorited()) {
             // Find and enable dragging for the single selected EntryHolder
             // Not nice but this is the best method I could find
             for (int i = 0; i < _holders.size(); i++) {
