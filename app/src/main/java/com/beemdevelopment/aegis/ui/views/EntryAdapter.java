@@ -139,7 +139,7 @@ public class EntryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
         if (comparator != null) {
             // insert the entry in the correct order
             // note: this assumes that _shownEntries has already been sorted
-            for (int i = 0; i < _shownEntries.size(); i++) {
+            for (int i = _favorites.size(); i < _shownEntries.size(); i++) {
                 if (comparator.compare(_shownEntries.get(i), entry) > 0) {
                     _shownEntries.add(i, entry);
                     notifyItemInserted(i);
@@ -179,6 +179,10 @@ public class EntryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
 
     public void removeEntry(VaultEntry entry) {
         _entries.remove(entry);
+
+        if (_favorites.contains(entry.getUUID())) {
+            removeFavorite(entry);
+        }
 
         if (_shownEntries.contains(entry)) {
             int position = _shownEntries.indexOf(entry);
@@ -335,6 +339,17 @@ public class EntryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
     public void setFavorites(List<UUID> favorites) { _favorites = favorites; }
 
     public List<UUID> getFavorites() { return _favorites; }
+
+    public void removeFavorite(VaultEntry entry) {
+        int position = -1;
+        for (int i = 0; i < _favorites.size(); i++) {
+            if (_favorites.get(i) == entry.getUUID()) {
+                position = i;
+            }
+        }
+
+        _favorites.remove(position);
+    }
 
     public void setGroups(TreeSet<String> groups) {
         _view.setGroups(groups);
